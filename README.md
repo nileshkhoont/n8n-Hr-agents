@@ -21,7 +21,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` in your browser.
+Open `https://hragent.movyainfotech.com/` in your browser.
 
 Project structure
 - `src/` - main application source
@@ -60,4 +60,3 @@ If you want, I can:
 - Add unit tests for the CSV parsing and sorting logic
 
 ---
-Made with ♥ — if you want branding help (polished SVG or PNG exports) I can produce them and wire them into `public/`.
