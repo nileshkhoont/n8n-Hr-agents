@@ -62,7 +62,7 @@ const ManageCandidates: React.FC = () => {
     error,
     refetch
   } = useCandidateData();
-  
+
   const {
     data: selectionCandidatesRaw = [],
     isLoading: selectionLoading,
@@ -80,7 +80,7 @@ const ManageCandidates: React.FC = () => {
     setLocalSelectionCandidates(selectionCandidates);
     setSelectionCount(selectionCandidates.length);
   }, [selectionCandidates]);
-  
+
   const [editing, setEditing] = useState<FormValues | null>(null);
   const [openEdit, setOpenEdit] = useState(false);
   const [deleting, setDeleting] = useState<{
@@ -130,7 +130,7 @@ const ManageCandidates: React.FC = () => {
     setCreating(true);
     try {
       // Check for duplicate name and email combination
-      const isDuplicate = candidates.some(candidate => 
+      const isDuplicate = candidates.some(candidate =>
         candidate.Name?.toLowerCase().trim() === values.Name.toLowerCase().trim() &&
         candidate.Email?.toLowerCase().trim() === values.Email.toLowerCase().trim()
       );
@@ -144,10 +144,88 @@ const ManageCandidates: React.FC = () => {
         return;
       }
 
-      console.log('Sending candidate data:', toLite(values));
-      const res = await createCandidate(toLite(values));
+      // First check if Email or Phone Number already exists in candidates
+      const emailExists = candidates.some(c => (c.Email || "").toLowerCase().trim() === values.Email.toLowerCase().trim());
+      const phoneExists = candidates.some(c => String(c["Phone Number"] || "").trim() === String(values["Phone Number"]).trim());
+      if (emailExists || phoneExists) {
+        const msgs: string[] = [];
+        if (emailExists) msgs.push('Email already exists');
+        if (phoneExists) msgs.push('Phone number already exists');
+        toast({
+          title: 'Candidate already exists',
+          description: msgs.join(' and ') + '.',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      // Call action webhook to allow server to return canonical/modified fields
+      const ACTION_WEBHOOK = "https://n8n.movya.com/webhook/d6804eae-5fac-4c53-a274-75b9db15d0eb";
+      const webhookPayload = {
+        Type: "Create",
+        data: toLite(values)
+      };
+      console.log('Calling action webhook (Create) with payload:', webhookPayload);
+      const webhookRes = await fetch(ACTION_WEBHOOK, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(webhookPayload)
+      });
+      if (!webhookRes.ok) throw new Error("Webhook call failed");
+      let webhookJson: any = {};
+      try {
+        webhookJson = await webhookRes.json();
+      } catch (_) {
+        webhookJson = {};
+      }
+
+      // Prefer webhook returned fields if available, otherwise fall back to form values
+      const returnedName = webhookJson.Name || webhookJson.name || values.Name;
+      const returnedEmail = webhookJson.Email || webhookJson.email || values.Email;
+      const returnedPhone = webhookJson["Phone Number"] || webhookJson.phone || webhookJson.phoneNumber || values["Phone Number"];
+      const returnedJobRole = webhookJson["Job Role Admin"] || webhookJson.jobRoleAdmin || webhookJson.job_role_admin || webhookJson.jobRole || webhookJson["JobRoleAdmin"] || values["Job Role Admin"];
+
+      // Ensure webhook returned all required fields (non-empty)
+      if (!returnedName || !returnedEmail || !returnedPhone || !returnedJobRole) {
+        toast({
+          title: "Webhook response incomplete",
+          description: "The webhook did not return all required fields. Please check the webhook response or enter all details manually.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Basic validations on returned values
+      if (!emailRegex.test(String(returnedEmail).toLowerCase())) {
+        toast({
+          title: "Invalid email from webhook",
+          description: "The webhook returned an invalid email address.",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (!/^\d+$/.test(String(returnedPhone)) || !phoneRegex.test(String(returnedPhone))) {
+        toast({
+          title: "Invalid phone from webhook",
+          description: "The webhook returned an invalid phone number. It must be numeric and 8-15 digits.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const payloadToCreate = {
+        Name: returnedName,
+        Email: returnedEmail,
+        "Phone Number": returnedPhone,
+        "Job Role Admin": returnedJobRole,
+        Datetime: formatDateTime()
+      };
+
+      console.log('Creating candidate with payload (after webhook):', payloadToCreate);
+      const res = await createCandidate(payloadToCreate);
       console.log('Create response:', res);
       if ((res as any).success === false) throw new Error((res as any).message || "Failed");
+
       toast({
         title: "Candidate added",
         description: "The candidate was saved successfully."
@@ -201,11 +279,11 @@ const ManageCandidates: React.FC = () => {
       }
 
       // Prefer webhook returned fields if available, otherwise fall back to form values
-  const returnedName = webhookJson.Name || webhookJson.name || values.Name;
-  const returnedEmail = webhookJson.Email || webhookJson.email || values.Email;
-  const returnedPhone = webhookJson["Phone Number"] || webhookJson.phone || webhookJson.phoneNumber || values["Phone Number"];
-  const returnedJobRole = webhookJson["Job Role Admin"] || webhookJson.jobRoleAdmin || webhookJson.job_role_admin || webhookJson.jobRole || webhookJson["JobRoleAdmin"] || values["Job Role Admin"];
-  const returnedRowIndex = webhookJson.RowIndex || webhookJson.rowIndex || webhookJson.index || webhookJson.row || undefined;
+      const returnedName = webhookJson.Name || webhookJson.name || values.Name;
+      const returnedEmail = webhookJson.Email || webhookJson.email || values.Email;
+      const returnedPhone = webhookJson["Phone Number"] || webhookJson.phone || webhookJson.phoneNumber || values["Phone Number"];
+      const returnedJobRole = webhookJson["Job Role Admin"] || webhookJson.jobRoleAdmin || webhookJson.job_role_admin || webhookJson.jobRole || webhookJson["JobRoleAdmin"] || values["Job Role Admin"];
+      const returnedRowIndex = webhookJson.RowIndex || webhookJson.rowIndex || webhookJson.index || webhookJson.row || undefined;
 
       const payloadToUpdate = {
         Name: returnedName,
@@ -259,10 +337,10 @@ const ManageCandidates: React.FC = () => {
         webhookJson = {};
       }
 
-  const nameToDelete = webhookJson.Name || webhookJson.name || row.Name;
-  const emailToDelete = webhookJson.Email || webhookJson.email || row.Email;
-  const jobRoleFromWebhook = webhookJson["Job Role Admin"] || webhookJson.jobRoleAdmin || webhookJson.job_role_admin || webhookJson.jobRole || webhookJson["JobRoleAdmin"] || row["Job Role Admin"];
-  const rowIndexFromWebhook = webhookJson.RowIndex || webhookJson.rowIndex || webhookJson.index || webhookJson.row || undefined;
+      const nameToDelete = webhookJson.Name || webhookJson.name || row.Name;
+      const emailToDelete = webhookJson.Email || webhookJson.email || row.Email;
+      const jobRoleFromWebhook = webhookJson["Job Role Admin"] || webhookJson.jobRoleAdmin || webhookJson.job_role_admin || webhookJson.jobRole || webhookJson["JobRoleAdmin"] || row["Job Role Admin"];
+      const rowIndexFromWebhook = webhookJson.RowIndex || webhookJson.rowIndex || webhookJson.index || webhookJson.row || undefined;
 
       const res = await deleteCandidate({
         keyName: nameToDelete,
@@ -293,8 +371,8 @@ const ManageCandidates: React.FC = () => {
     const candidateName = candidate["Name "]?.trim() || "Unknown";
     setProcessingCandidate(candidate.Email);
     try {
-      // Wait for 10 seconds before processing
-      await new Promise(res => setTimeout(res, 10000));
+      // Wait for 5 seconds before processing
+      await new Promise(res => setTimeout(res, 5000));
 
       // Prepare data for webhook (Accept)
       const webhookData = {
@@ -355,8 +433,8 @@ const ManageCandidates: React.FC = () => {
     const candidateName = candidate["Name "]?.trim() || "Unknown";
     setProcessingCandidate(candidate.Email);
     try {
-      // Wait for 10 seconds before processing
-      await new Promise(res => setTimeout(res, 10000));
+      // Wait for 5 seconds before processing
+      await new Promise(res => setTimeout(res, 5000));
 
       // Prepare data for webhook (Reject)
       const webhookData = {
@@ -401,129 +479,128 @@ const ManageCandidates: React.FC = () => {
     }
   };
   return <div className="min-h-screen bg-background">
-      <NavBar />
-      <main className="container mx-auto max-w-7xl px-4 py-6 space-y-8">
-        {/* Form Section */}
-        <Card className="p-6 bg-surface border-card-border shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h1 className="text-xl font-semibold text-foreground">Manage Candidates</h1>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => {
-                refetch();
-                refetchSelection();
-              }}
-              disabled={loading || selectionLoading}
-            >
-              {(loading || selectionLoading) ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading...
-                </>
-              ) : (
-                <>
-                  <RefreshCcw className="h-4 w-4" /> Refresh
-                </>
-              )}
-            </Button>
-          </div>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <FormField control={form.control} name="Name" render={({
+    <NavBar />
+    <main className="container mx-auto max-w-7xl px-4 py-6 space-y-8">
+      {/* Form Section */}
+      <Card className="p-6 bg-surface border-card-border shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-foreground">Add Candidates</h1>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              refetch();
+              refetchSelection();
+            }}
+            disabled={loading || selectionLoading}
+          >
+            {(loading || selectionLoading) ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+              </>
+            ) : (
+              <>
+                <RefreshCcw className="h-4 w-4" /> Refresh
+              </>
+            )}
+          </Button>
+        </div>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <FormField control={form.control} name="Name" render={({
               field
             }) => <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Full name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>} />
+                <FormLabel>Name</FormLabel>
+                <FormControl>
+                  <Input placeholder="Full name" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>} />
 
-              <FormField control={form.control} name="Email" render={({
+            <FormField control={form.control} name="Email" render={({
               field
             }) => <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input placeholder="example@gmail.com" {...field} />
-                    </FormControl>
-                    
-                    <FormMessage />
-                  </FormItem>} />
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input placeholder="example@gmail.com" {...field} />
+                </FormControl>
 
-              <FormField control={form.control} name="Phone Number" render={({
+                <FormMessage />
+              </FormItem>} />
+
+            <FormField control={form.control} name="Phone Number" render={({
               field
             }) => <FormItem>
-                    <FormLabel>Phone Number</FormLabel>
-                    <FormControl>
-                      <Input placeholder="919876543210" {...field} />
-                    </FormControl>
-                    
-                    <FormMessage />
-                  </FormItem>} />
+                <FormLabel>Phone Number</FormLabel>
+                <FormControl>
+                  <Input placeholder="919876543210" {...field} />
+                </FormControl>
 
-              <FormField control={form.control} name="Job Role Admin" render={({
+                <FormMessage />
+              </FormItem>} />
+
+            <FormField control={form.control} name="Job Role Admin" render={({
               field
             }) => <FormItem>
-                    <FormLabel>Job Role Admin</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. BDE" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>} />
+                <FormLabel>Job Role Admin</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. BDE" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>} />
 
-              <div className="md:col-span-2 lg:col-span-4 flex justify-end pt-2">
-                <Button type="submit" className="gap-2" disabled={creating}>
-                  {creating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" /> Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4" /> Submit
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </Card>
-
-        {/* Tabs Section */}
-        <Card className="p-0 bg-surface border-card-border shadow-sm overflow-hidden">
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <div className="p-4 border-b border-card-border">
-              <TabsList className="w-full justify-start">
-                <TabsTrigger value="details">Candidate Details</TabsTrigger>
-                <TabsTrigger value="selection">
-                  Candidate Selection
-                  {selectionCount > 0 && (
-                    <span className="ml-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs">
-                      {selectionCount}
-                    </span>
-                  )}
-                </TabsTrigger>
-              </TabsList>
+            <div className="md:col-span-2 lg:col-span-4 flex justify-end pt-2">
+              <Button type="submit" className="gap-2" disabled={creating}>
+                {creating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Submitting...
+                  </>
+                ) : (
+                  <>Submit</>
+                )}
+              </Button>
             </div>
 
-            {/* Candidate Details Tab */}
-            <TabsContent value="details" className="m-0">
-              <div className="relative w-full overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone Number</TableHead>
-                  <TableHead>Job Role Admin</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading &&
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={`skeleton-${i}`}>
+          </form>
+        </Form>
+      </Card>
+
+      {/* Tabs Section */}
+      <Card className="p-0 bg-surface border-card-border shadow-sm overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <div className="p-4 border-b border-card-border">
+            <TabsList className="w-full justify-start">
+              <TabsTrigger value="details">Call Queue</TabsTrigger>
+              <TabsTrigger value="selection">
+                Candidate From Email
+                {selectionCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs">
+                    {selectionCount}
+                  </span>
+                )}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          {/* Candidate Details Tab */}
+          <TabsContent value="details" className="m-0">
+            <div className="relative w-full overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone Number</TableHead>
+                    <TableHead>Job Role Admin</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading &&
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={`skeleton-${i}`}>
                         <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-52" /></TableCell>
                         <TableCell><Skeleton className="h-4 w-28" /></TableCell>
@@ -532,58 +609,57 @@ const ManageCandidates: React.FC = () => {
                         <TableCell className="text-right">
                           <Skeleton className="h-8 w-24 ml-auto" />
                         </TableCell>
-                    </TableRow>
-                  ))
-                }
-                {!loading && candidates.map((row, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell className="font-medium">{row.Name}</TableCell>
-                    <TableCell className="truncate max-w-[240px]">{row.Email}</TableCell>
-                    <TableCell>{row["Phone Number"]}</TableCell>
-                    <TableCell>{row["Job Role Admin"]}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        row["Interview Status"] || row["Interview Scheduled"] || row["Interview Date"] ? 
-                        'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' : 
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-                      }`}>
-                        {row["Interview Status"] || row["Interview Scheduled"] || row["Interview Date"] ? 'Completed' : 'Pending'}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Dialog open={openEdit && editing?.Email === row.Email && editing?.Name === row.Name} onOpenChange={o => !o && setOpenEdit(false)}>
-                          <DialogTrigger asChild>
-                            <Button variant="outline" size="sm" className="gap-2" onClick={() => startEdit(row)}>
-                              <Pencil className="h-4 w-4" /> Edit
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Edit Candidate</DialogTitle>
-                              <DialogDescription>Update details and save changes.</DialogDescription>
-                            </DialogHeader>
-                            {editing && <EditForm initial={editing} saving={savingEdit} onCancel={() => setOpenEdit(false)} onSave={vals => saveEdit(vals, editing)} />}
-                            <DialogFooter />
-                          </DialogContent>
-                        </Dialog>
+                      </TableRow>
+                    ))
+                  }
+                  {!loading && candidates.map((row, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium">{row.Name}</TableCell>
+                      <TableCell className="truncate max-w-[240px]">{row.Email}</TableCell>
+                      <TableCell>{row["Phone Number"]}</TableCell>
+                      <TableCell>{row["Job Role Admin"]}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${row["Interview Status"] || row["Interview Scheduled"] || row["Interview Date"] ?
+                            'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                          }`}>
+                          {row["Interview Status"] || row["Interview Scheduled"] || row["Interview Date"] ? 'Completed' : 'Pending'}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Dialog open={openEdit && editing?.Email === row.Email && editing?.Name === row.Name} onOpenChange={o => !o && setOpenEdit(false)}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" className="gap-2" onClick={() => startEdit(row)}>
+                                <Pencil className="h-4 w-4" /> Edit
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Edit Candidate</DialogTitle>
+                                <DialogDescription>Update details and save changes.</DialogDescription>
+                              </DialogHeader>
+                              {editing && <EditForm initial={editing} saving={savingEdit} onCancel={() => setOpenEdit(false)} onSave={vals => saveEdit(vals, editing)} />}
+                              <DialogFooter />
+                            </DialogContent>
+                          </Dialog>
 
-                        <AlertDialog open={deleting?.Email === row.Email && deleting?.Name === row.Name} onOpenChange={(o) => { if (!o && !deletingPending) setDeleting(null); }}>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" className="gap-2" onClick={() => setDeleting({
-                          Name: row.Name,
-                          Email: row.Email
-                        })}>
-                              <Trash2 className="h-4 w-4" /> Delete
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete candidate?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This action cannot be undone. This will permanently remove the candidate from the sheet.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
+                          <AlertDialog open={deleting?.Email === row.Email && deleting?.Name === row.Name} onOpenChange={(o) => { if (!o && !deletingPending) setDeleting(null); }}>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" className="gap-2" onClick={() => setDeleting({
+                                Name: row.Name,
+                                Email: row.Email
+                              })}>
+                                <Trash2 className="h-4 w-4" /> Delete
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete candidate?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action cannot be undone. This will permanently remove the candidate from the sheet.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel disabled={deletingPending}>Cancel</AlertDialogCancel>
                                 <Button
@@ -601,69 +677,69 @@ const ManageCandidates: React.FC = () => {
                                   )}
                                 </Button>
                               </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {!loading && candidates.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      No candidates found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-            </TabsContent>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!loading && candidates.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        No candidates found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </TabsContent>
 
-            {/* Candidate Selection Tab */}
-            <TabsContent value="selection" className="m-0">
-              <div className="p-6">
-                {selectionLoading && localSelectionCandidates.length === 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <Card key={i} className="p-6">
-                        <Skeleton className="h-48 w-full" />
-                      </Card>
-                    ))}
-                  </div>
-                ) : localSelectionCandidates.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    No candidates in selection queue.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {localSelectionCandidates.map((candidate, idx) => (
-                      <CandidateSelectionCard
-                        key={idx}
-                        candidate={candidate}
-                        onAccept={handleAcceptCandidate}
-                        onReject={handleRejectCandidate}
-                        onClick={setSelectedCandidate}
-                        isProcessing={processingCandidate === candidate.Email}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </Card>
-      </main>
+          {/* Candidate Selection Tab */}
+          <TabsContent value="selection" className="m-0">
+            <div className="p-6">
+              {selectionLoading && localSelectionCandidates.length === 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i} className="p-6">
+                      <Skeleton className="h-48 w-full" />
+                    </Card>
+                  ))}
+                </div>
+              ) : localSelectionCandidates.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  No candidates in selection queue.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {localSelectionCandidates.map((candidate, idx) => (
+                    <CandidateSelectionCard
+                      key={idx}
+                      candidate={candidate}
+                      onAccept={handleAcceptCandidate}
+                      onReject={handleRejectCandidate}
+                      onClick={setSelectedCandidate}
+                      isProcessing={processingCandidate === candidate.Email}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </Card>
+    </main>
 
-      {/* Candidate Selection Modal */}
-      <CandidateSelectionModal
-        candidate={selectedCandidate}
-        open={!!selectedCandidate}
-        onClose={() => setSelectedCandidate(null)}
-        onAccept={handleAcceptCandidate}
-        onReject={handleRejectCandidate}
-        isProcessing={processingCandidate === selectedCandidate?.Email}
-      />
-    </div>;
+    {/* Candidate Selection Modal */}
+    <CandidateSelectionModal
+      candidate={selectedCandidate}
+      open={!!selectedCandidate}
+      onClose={() => setSelectedCandidate(null)}
+      onAccept={handleAcceptCandidate}
+      onReject={handleRejectCandidate}
+      isProcessing={processingCandidate === selectedCandidate?.Email}
+    />
+  </div>;
 };
 const EditForm: React.FC<{
   initial: FormValues;
@@ -676,48 +752,48 @@ const EditForm: React.FC<{
   onSave,
   onCancel
 }) => {
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: initial
-  });
-  return <Form {...form}>
+    const form = useForm<FormValues>({
+      resolver: zodResolver(formSchema),
+      defaultValues: initial
+    });
+    return <Form {...form}>
       <form onSubmit={form.handleSubmit(onSave)} className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <FormField control={form.control} name="Name" render={({
-        field
-      }) => <FormItem>
-              <FormLabel>Name</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>} />
+          field
+        }) => <FormItem>
+            <FormLabel>Name</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>} />
         <FormField control={form.control} name="Email" render={({
-        field
-      }) => <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>} />
+          field
+        }) => <FormItem>
+            <FormLabel>Email</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>} />
         <FormField control={form.control} name="Phone Number" render={({
-        field
-      }) => <FormItem>
-              <FormLabel>Phone Number</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>} />
+          field
+        }) => <FormItem>
+            <FormLabel>Phone Number</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>} />
         <FormField control={form.control} name="Job Role Admin" render={({
-        field
-      }) => <FormItem>
-              <FormLabel>Job Role Admin</FormLabel>
-              <FormControl>
-                <Input {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>} />
+          field
+        }) => <FormItem>
+            <FormLabel>Job Role Admin</FormLabel>
+            <FormControl>
+              <Input {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>} />
         <div className="md:col-span-2 flex justify-end gap-2 pt-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={saving}>
             Cancel
@@ -734,6 +810,6 @@ const EditForm: React.FC<{
         </div>
       </form>
     </Form>;
-};
+  };
 export default ManageCandidates;
 

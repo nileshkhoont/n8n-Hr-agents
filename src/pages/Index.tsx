@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CandidateDropdown, Candidate } from '@/components/CandidateDropdown';
 import { CandidateDetails } from '@/components/CandidateDetails';
 import { useCandidateData } from '@/hooks/useCandidateData';
@@ -11,6 +11,35 @@ import NavBar from '@/components/NavBar';
 const Index = () => {
   const { candidates, loading, error, refetch } = useCandidateData();
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+
+  // Auto-select a candidate when the list loads.
+  // Auto-select a candidate when the list loads.
+  // Prefer a "completed" candidate (has interview-related fields). If none,
+  // prefer any candidate with extra data, else fall back to the first candidate.
+  useEffect(() => {
+    if (!selectedCandidate && !loading && candidates.length > 0) {
+      const isCompleted = (c: any) => {
+        const v = (c['Interview Status'] || c['Interview Scheduled'] || c['Interview Date']);
+        return !!(v && typeof v === 'string' && v.trim() !== '');
+      };
+
+      const completedCandidate = candidates.find(isCompleted);
+      if (completedCandidate) {
+        setSelectedCandidate(completedCandidate);
+        return;
+      }
+
+      const candidateWithData = candidates.find(c =>
+        Object.entries(c).some(([key, value]) => {
+          if (!value) return false;
+          const k = (key || '').trim();
+          if (k === 'Name' || k === 'Email') return false;
+          return value.toString().trim() !== '';
+        })
+      );
+      setSelectedCandidate(candidateWithData || candidates[0]);
+    }
+  }, [candidates, loading, selectedCandidate]);
 
   const handleRefresh = () => {
     refetch();
