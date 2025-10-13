@@ -32,7 +32,12 @@ export const CandidateSelectionModal: React.FC<CandidateSelectionModalProps> = (
   const educationScore = candidate["Education Score"] || 0;
   const overallScore = candidate["Overall Score "] || 0;
   
-const skills = candidate["Technical skill"]?.split(/[,\.]/).map(s => s.trim()).filter(Boolean) || [];
+// Parse technical skills and remove any "Soft Skills" prefix (case-insensitive)
+const skills = (candidate["Technical skill"] || '')
+  .toString()
+  .split(/[,\.\n;]+/)
+  .map(s => s.replace(/\bsoft\s*skills\b\s*[:\-–—]*\s*/i, '').trim())
+  .filter(Boolean);
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

@@ -32,19 +32,23 @@ export const CandidateSelectionCard: React.FC<CandidateSelectionCardProps> = ({
 
   // Clean and trim technical skills; keep count for the "+n more" badge
   const allSkills = candidate["Technical skill"]
-    ? candidate["Technical skill"].split(',').map(s => s.trim()).filter(Boolean)
+    ? candidate["Technical skill"].toString().split(/[,\.\n;]+/).map(s => s.trim()).filter(Boolean)
     : [];
-  const skills = allSkills.slice(0, 3);
-  const extraSkillsCount = Math.max(0, allSkills.length - skills.length);
+  // Remove the phrase "Soft Skills" if present in any skill entry (keep the rest)
+  const cleanedSkills = allSkills
+    .map(s => s.replace(/\bsoft\s*skills\b\s*[:\-–—]*\s*/i, '').trim())
+    .filter(Boolean);
+  const skills = cleanedSkills.slice(0, 3);
+  const extraSkillsCount = Math.max(0, cleanedSkills.length - skills.length);
   const experience = candidate["Years of relevent experience"] || "0";
 
   return (
     <Card
-      className="p-5 hover:shadow-lg transition-all duration-200 cursor-pointer bg-card border-border"
-      onClick={() => onClick(candidate)}
+      className="p-5 hover:shadow-lg transition-all duration-200 bg-card border-border flex flex-col h-full"
     >
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col h-full">
+        <div onClick={() => onClick(candidate)} className="space-y-4 cursor-pointer flex-grow overflow-hidden">
+          <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="text-lg font-semibold text-foreground truncate">{name}</h3>
             <p className="text-sm text-muted-foreground mt-0.5">{designation}</p>
@@ -96,11 +100,13 @@ export const CandidateSelectionCard: React.FC<CandidateSelectionCardProps> = ({
         )}
 
 
-        <p className="text-sm text-muted-foreground line-clamp-2 italic leading-relaxed">
-          {quickRead ? `"${quickRead}"` : ''}
-        </p>
+          <p className="text-sm text-muted-foreground line-clamp-2 italic leading-relaxed">
+            {quickRead ? `"${quickRead}"` : ''}
+          </p>
+        </div>
 
-        <div className="flex gap-3 pt-2">
+        {/* Footer - buttons anchored at the bottom */}
+        <div className="mt-auto pt-2 flex gap-3 items-center">
           <Button
             onClick={(e) => {
               e.stopPropagation();

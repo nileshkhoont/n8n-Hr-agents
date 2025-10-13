@@ -265,12 +265,27 @@ export const CandidateDetails: React.FC<CandidateDetailsProps> = ({ candidate })
                       </p>
                     </div>
                   ) : (
-                    <Badge 
-                      variant={getFieldVariant(fieldName, value.toString())}
-                      className="text-xs"
-                    >
-                      {formattedValue}
-                    </Badge>
+                    // Render technical skills as separate badges when the field is a technical skills field
+                    (fieldName.toLowerCase().includes('technical') || fieldName.toLowerCase().includes('technical skill')) ? (
+                      <div className="flex flex-wrap gap-2">
+                        {value.toString()
+                          .split(/[,\.\n]/)
+                          .map(s => s.replace(/\bsoft\s*skills\b\s*[:\-–—]*\s*/i, '').trim())
+                          .filter(Boolean)
+                          .map((skill, i) => (
+                            <Badge key={`${fieldName}-${i}`} className="text-xs px-3 py-1">
+                              {skill}
+                            </Badge>
+                          ))}
+                      </div>
+                    ) : (
+                      <Badge 
+                        variant={getFieldVariant(fieldName, value.toString())}
+                        className="text-xs"
+                      >
+                        {formattedValue}
+                      </Badge>
+                    )
                   )}
                 </div>
               </div>

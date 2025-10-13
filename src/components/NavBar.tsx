@@ -42,6 +42,19 @@ export const NavBar: React.FC = () => {
           >
             Manage Candidates
           </NavLink>
+          <NavLink
+            to="/linkedin"
+            className={({ isActive }) =>
+              cn(
+                linkBase,
+                isActive
+                  ? "text-primary"
+                  : "text-muted-foreground hover:bg-surface-hover"
+              )
+            }
+          >
+            LinkedIn
+          </NavLink>
         </div>
       </nav>
     </header>

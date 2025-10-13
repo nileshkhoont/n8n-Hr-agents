@@ -711,7 +711,7 @@ const ManageCandidates: React.FC = () => {
                   No candidates in selection queue.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" style={{ gridAutoRows: '1fr' }}>
                   {localSelectionCandidates.map((candidate, idx) => (
                     <CandidateSelectionCard
                       key={idx}
