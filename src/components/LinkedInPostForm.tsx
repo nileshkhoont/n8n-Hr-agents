@@ -11,35 +11,36 @@ export const LinkedInPostForm: React.FC = () => {
   const [skill, setSkill] = useState('');
   const [posting, setPosting] = useState(false);
 
+  const isFormValid = position.trim() && experience.trim() && skill.trim();
+
   const handlePost = async () => {
-    if (!position.trim() || !experience.trim() || !skill.trim()) {
-      toast({ title: 'Missing fields', description: 'Please fill Position, Experience and Skill', variant: 'destructive' });
+    if (!isFormValid) {
+      toast({ 
+        title: 'Missing fields', 
+        description: 'Please fill Position, Experience, and Skill', 
+        variant: 'destructive' 
+      });
       return;
     }
+
     setPosting(true);
     try {
-      const payload = {
-        Type: 'LinkedInPost',
-        Position: position,
-        Experience: experience,
-        Skill: skill
-      };
+      const payload = { Type: 'LinkedInPost', Position: position, Experience: experience, Skill: skill };
       const res = await fetch(ACTION_WEBHOOK, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+
       if (!res.ok) throw new Error('Webhook failed');
+
       let json: any = {};
       try { json = await res.json(); } catch (_) { json = {}; }
 
-      const returnedPosition = json.Position || json.position || position;
-      const returnedExperience = json.Experience || json.experience || experience;
-      const returnedSkill = json.Skill || json.skill || skill;
-
-      setPosition(returnedPosition);
-      setExperience(returnedExperience);
-      setSkill(returnedSkill);
+      // Use returned data if present
+      setPosition(json.Position || json.position || position);
+      setExperience(json.Experience || json.experience || experience);
+      setSkill(json.Skill || json.skill || skill);
 
       toast({ title: 'Posted', description: 'LinkedIn post processed by webhook' });
     } catch (e: any) {
@@ -54,17 +55,20 @@ export const LinkedInPostForm: React.FC = () => {
       <div>
         <label className="block text-sm text-muted-foreground mb-1">Position</label>
         <Input value={position} onChange={e => setPosition(e.target.value)} />
+        {!position.trim() && <p className="text-red-500 text-xs mt-1">Position is required</p>}
       </div>
       <div>
         <label className="block text-sm text-muted-foreground mb-1">Experience</label>
         <Input value={experience} onChange={e => setExperience(e.target.value)} />
+        {!experience.trim() && <p className="text-red-500 text-xs mt-1">Experience is required</p>}
       </div>
       <div>
         <label className="block text-sm text-muted-foreground mb-1">Skill</label>
         <Input value={skill} onChange={e => setSkill(e.target.value)} />
+        {!skill.trim() && <p className="text-red-500 text-xs mt-1">Skill is required</p>}
       </div>
       <div className="flex justify-end">
-        <Button onClick={handlePost} disabled={posting} className="gap-2">
+        <Button onClick={handlePost} disabled={!isFormValid || posting} className="gap-2">
           {posting ? 'Posting...' : 'Post'}
         </Button>
       </div>
@@ -73,3 +77,4 @@ export const LinkedInPostForm: React.FC = () => {
 };
 
 export default LinkedInPostForm;
+
