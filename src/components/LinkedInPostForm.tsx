@@ -66,10 +66,14 @@ export const LinkedInPostForm: React.FC = () => {
     }
   };
 
+  const allFieldsFilled = position.trim() && experience.trim() && skill.trim();
+
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm text-muted-foreground mb-1">Position <span className="text-red-500">*</span></label>
+        <label className="block text-sm text-muted-foreground mb-1">
+          Position <span className="text-red-500">*</span>
+        </label>
         <Input
           value={position}
           onChange={e => setPosition(e.target.value)}
@@ -80,7 +84,9 @@ export const LinkedInPostForm: React.FC = () => {
       </div>
 
       <div>
-        <label className="block text-sm text-muted-foreground mb-1">Experience <span className="text-red-500">*</span></label>
+        <label className="block text-sm text-muted-foreground mb-1">
+          Experience <span className="text-red-500">*</span>
+        </label>
         <Input
           value={experience}
           onChange={e => setExperience(e.target.value)}
@@ -91,7 +97,9 @@ export const LinkedInPostForm: React.FC = () => {
       </div>
 
       <div>
-        <label className="block text-sm text-muted-foreground mb-1">Skill <span className="text-red-500">*</span></label>
+        <label className="block text-sm text-muted-foreground mb-1">
+          Skill <span className="text-red-500">*</span>
+        </label>
         <Input
           value={skill}
           onChange={e => setSkill(e.target.value)}
@@ -102,7 +110,11 @@ export const LinkedInPostForm: React.FC = () => {
       </div>
 
       <div className="flex justify-end">
-        <Button onClick={handlePost} disabled={posting} className="gap-2">
+        <Button
+          onClick={handlePost}
+          disabled={posting || !allFieldsFilled}
+          className="gap-2"
+        >
           {posting ? 'Posting...' : 'Post'}
         </Button>
       </div>
