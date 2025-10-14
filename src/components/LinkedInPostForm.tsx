@@ -15,27 +15,21 @@ export const LinkedInPostForm: React.FC = () => {
 
   const validate = () => {
     const newErrors: typeof errors = {};
-
     if (!position.trim()) newErrors.position = 'Position is required';
-    else if (position.length < 2) newErrors.position = 'Position must be at least 2 characters';
-
     if (!experience.trim()) newErrors.experience = 'Experience is required';
-    else if (!/^\d+(\.\d+)?$/.test(experience)) newErrors.experience = 'Experience must be a number';
-
     if (!skill.trim()) newErrors.skill = 'Skill is required';
-    else if (skill.length < 2) newErrors.skill = 'Skill must be at least 2 characters';
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handlePost = async () => {
     if (!validate()) {
-      toast({ title: 'Validation Error', description: 'Please fix the errors in the form', variant: 'destructive' });
+      toast({ title: 'Validation Error', description: 'Please fill all required fields', variant: 'destructive' });
       return;
     }
 
     setPosting(true);
+
     try {
       const payload = {
         Type: 'LinkedInPost',
@@ -53,13 +47,18 @@ export const LinkedInPostForm: React.FC = () => {
       if (!res.ok) throw new Error('Webhook failed');
 
       let json: any = {};
-      try { json = await res.json(); } catch (_) { json = {}; }
+      try {
+        json = await res.json();
+      } catch (_) {
+        json = {};
+      }
 
       setPosition(json.Position || json.position || position);
       setExperience(json.Experience || json.experience || experience);
       setSkill(json.Skill || json.skill || skill);
 
       toast({ title: 'Posted', description: 'LinkedIn post processed by webhook' });
+      setErrors({});
     } catch (e: any) {
       toast({ title: 'Post failed', description: e.message || String(e), variant: 'destructive' });
     } finally {
@@ -68,22 +67,37 @@ export const LinkedInPostForm: React.FC = () => {
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <div>
-        <label className="block text-sm text-muted-foreground mb-1">Position</label>
-        <Input value={position} onChange={e => setPosition(e.target.value)} />
+        <label className="block text-sm text-muted-foreground mb-1">Position <span className="text-red-500">*</span></label>
+        <Input
+          value={position}
+          onChange={e => setPosition(e.target.value)}
+          className={errors.position ? 'border-red-500' : ''}
+          required
+        />
         {errors.position && <p className="text-red-500 text-xs mt-1">{errors.position}</p>}
       </div>
 
       <div>
-        <label className="block text-sm text-muted-foreground mb-1">Experience (years)</label>
-        <Input value={experience} onChange={e => setExperience(e.target.value)} />
+        <label className="block text-sm text-muted-foreground mb-1">Experience <span className="text-red-500">*</span></label>
+        <Input
+          value={experience}
+          onChange={e => setExperience(e.target.value)}
+          className={errors.experience ? 'border-red-500' : ''}
+          required
+        />
         {errors.experience && <p className="text-red-500 text-xs mt-1">{errors.experience}</p>}
       </div>
 
       <div>
-        <label className="block text-sm text-muted-foreground mb-1">Skill</label>
-        <Input value={skill} onChange={e => setSkill(e.target.value)} />
+        <label className="block text-sm text-muted-foreground mb-1">Skill <span className="text-red-500">*</span></label>
+        <Input
+          value={skill}
+          onChange={e => setSkill(e.target.value)}
+          className={errors.skill ? 'border-red-500' : ''}
+          required
+        />
         {errors.skill && <p className="text-red-500 text-xs mt-1">{errors.skill}</p>}
       </div>
 
