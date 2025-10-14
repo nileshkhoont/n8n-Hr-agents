@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 
-const ACTION_WEBHOOK = 'https://n8n.movya.com/webhook/d6804eae-5fac-4c53-a274-75b9db15d0eb';
+const ACTION_WEBHOOK = 'https://n8n.movya.com/webhook-test/movya-post';
 
 export const LinkedInPostForm: React.FC = () => {
   const [position, setPosition] = useState('');
